@@ -12,18 +12,17 @@ using std::vector;
 class Car {
 private:
   int version;
+  int lap = 0;
+  int checkpoint = 0;
   unsigned short port;
-  string name;
   sf::Vector2f velocity;
   sf::Texture bodyTexture;
   sf::Sprite body;
-  sf::Keyboard::Key *keys;
-  configuration config;
+  Configuration config;
 
 public:
-  Car(double x, double y, sf::Keyboard::Key keys[], configuration config,
+  Car(double x, double y, Configuration config,
       bool smooth = false) {
-    this->keys = keys;
     this->config = config;
     this->velocity = {0.0, 0.0};
     vector<string> carFolderPaths =
@@ -41,37 +40,38 @@ public:
     this->body.setPosition(x, y);
   }
 
-  void checkMove() {
-    if (sf::Keyboard::isKeyPressed(this->keys[0])) {
-      this->moveBody(100.0);
-    }
-    if (sf::Keyboard::isKeyPressed(this->keys[1])) {
-      this->moveBody(-5.0);
-    }
-    if (sf::Keyboard::isKeyPressed(this->keys[2])) {
-      this->turn(-1.0);
-    }
-    if (sf::Keyboard::isKeyPressed(this->keys[3])) {
-      this->turn(1.0);
-    }
-  }
-
   void turn(double rotation) {
     this->body.rotate(rotation * config.rotationSpeed);
   }
 
-  void moveBody(double speed) {
-    sf::Vector2f diff = sf::Vector2f(0., -speed);
+  void moveBody(bool gas) {
+    sf::Vector2f diff = sf::Vector2f(0., -100*gas);
     this->body.setPosition(this->body.getTransform().transformPoint(
         this->body.getOrigin() + diff));
     this->body.setPosition(CLIP((double)this->body.getPosition().x, 0., 1000.),
                            CLIP((double)this->body.getPosition().y, 0., 1000.));
   }
 
+  void handleResponse(Response response){
+    moveBody(response.gas);
+    turn(response.rotate);
+  }
+
+  PlayerState getPlayerState(){
+    PlayerState state;
+    state.x = this->body.getPosition().x;
+    state.y = this->body.getPosition().y;
+    state.rotation = this->body.getRotation();
+    state.xSpeed = this->velocity.x;
+    state.ySpeed = this->velocity.y;
+    state.lap = this->lap;
+    state.checkpoint = this->checkpoint;
+    return state;
+  }
+
   sf::Sprite getBody() { return this->body; }
   unsigned short getPort() { return this->port; }
   void setPort(unsigned short port) { this->port = port; }
-  string getName() { return this->name; }
 };
 
 #endif
