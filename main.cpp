@@ -47,7 +47,6 @@ int main(int argc, char *argv[0]) {
 
   Server server = Server(config);
   // spawn clients
-  // std::vector<thread> threads;
   vector<pid_t> clientIDS;
   for (int i = 0; i < config.numOfPlayers; i++) {
     string address = sf::IpAddress::getLocalAddress().toString();
@@ -55,9 +54,6 @@ int main(int argc, char *argv[0]) {
     string result = "/Users/mareksubocz/it/FastOrFurious/probaClient "+address+" "+port;
     const char* char_array = result.c_str();
     clientIDS.push_back(fork());
-    for (auto &id: clientIDS){
-      cout<<id<<" ";
-    }
     if (clientIDS[clientIDS.size()-1] == 0){
       setpgid(getpid(), getpid());
       system(char_array);
