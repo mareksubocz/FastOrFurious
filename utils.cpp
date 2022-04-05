@@ -23,7 +23,7 @@ struct Configuration {
   float maxVelocity = 1.;
   int timeout = 10;
   int framesPerAnswer = 1;
-  int numOfPlayers = 3;
+  int numOfPlayers = 2;
 
   friend sf::Packet &operator<<(sf::Packet &os, const Configuration &c) {
     os << c.frontFriction << c.sideFriction << c.acc << c.dec << c.rotationSpeed
@@ -47,34 +47,32 @@ struct Configuration {
 
 // 28 bytes
 struct PlayerState {
-  float x;
-  float y;
+  sf::Vector2f pos;
+  sf::Vector2f vel;
   float rotation;
-  float xSpeed;
-  float ySpeed;
   int lap;
   int checkpoint;
 
   friend sf::Packet &operator<<(sf::Packet &os, const PlayerState &p) {
-    os << p.x << p.y << p.rotation << p.xSpeed << p.ySpeed << p.lap
+    os << p.pos.x << p.pos.y << p.vel.x << p.vel.y << p.rotation << p.lap
        << p.checkpoint;
     return os;
   }
 
   friend sf::Packet &operator>>(sf::Packet &os, PlayerState &p) {
-    return os >> p.x >> p.y >> p.rotation >> p.xSpeed >> p.ySpeed >> p.lap >>
-           p.checkpoint;
+    return os >> p.pos.x >> p.pos.y >> p.vel.x >> p.vel.y >> p.rotation >>
+           p.lap >> p.checkpoint;
   }
 
   friend ostream &operator<<(ostream &os, const PlayerState &p) {
-    os << p.x << " " << p.y << " " << p.rotation << " " << p.xSpeed << " "
-       << p.ySpeed << " " << p.lap << " " << p.checkpoint;
+    os << p.pos.x << " " << p.pos.y << " " << p.vel.x << " " << p.vel.y << " "
+       << p.rotation << " " << p.lap << " " << p.checkpoint;
     return os;
   }
 };
 
 struct Response {
-  int gas = 0;    // 0-100
+  bool gas = 0;   // 0-100
   int rotate = 0; //{-1, 0, 1}
   bool boost = 0;
 

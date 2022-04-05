@@ -91,7 +91,7 @@ public:
     printf("All players connected.\n");
   }
 
-  void sendGameState(PlayerState playerStates[]) {
+  void sendGameState(vector<PlayerState>& playerStates) {
     sf::Packet packet;
     for (int i = 0; i < config.numOfPlayers; i++){
       packet << playerStates[i];

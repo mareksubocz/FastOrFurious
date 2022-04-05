@@ -21,15 +21,17 @@ private:
   Configuration config;
   vector<PlayerState> playerStates;
   bool isBot;
+  int keysNum;
 
 public:
   Client(sf::IpAddress serverIP, unsigned short serverPort,
-         bool isBot = false) {
+         bool isBot = false, int keysNum = 0) {
     this->serverIP = serverIP;
     this->serverPort = serverPort;
     this->socket = new sf::UdpSocket();
     this->socket->bind(sf::Socket::AnyPort);
     this->isBot = isBot;
+    this->keysNum = keysNum;
   }
 
   void connectToServer() {
@@ -73,25 +75,26 @@ public:
     clock.restart();
     sf::Time timeout = sf::milliseconds(config.timeout);
     sf::Time elapsed = clock.getElapsedTime();
+    vector<vector<sf::Keyboard::Key>> keys;
+    keys.push_back({sf::Keyboard::Up, sf::Keyboard::Left, sf::Keyboard::Right});
+    keys.push_back({sf::Keyboard::W, sf::Keyboard::A, sf::Keyboard::D});
     Response response;
     if (this->isBot) {
-      response.gas = 50;
+      response.gas = 1;
     }
     // human is steering, use keyboard
     else {
-      sf::Keyboard::Key keys[] = {sf::Keyboard::Up, sf::Keyboard::Left,
-                                  sf::Keyboard::Right};
       bool pressed = false;
       while (elapsed < timeout) {
-        if (sf::Keyboard::isKeyPressed(keys[0])) {
-          response.gas = 100;
+        if (sf::Keyboard::isKeyPressed(keys[this->keysNum][0])) {
+          response.gas = 1;
           pressed = true;
         }
-        if (sf::Keyboard::isKeyPressed(keys[1])) {
+        if (sf::Keyboard::isKeyPressed(keys[this->keysNum][1])) {
           response.rotate = -1;
           pressed = true;
         }
-        if (sf::Keyboard::isKeyPressed(keys[2])) {
+        if (sf::Keyboard::isKeyPressed(keys[this->keysNum][2])) {
           response.rotate = 1;
           pressed = true;
         }
