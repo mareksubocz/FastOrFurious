@@ -2,16 +2,14 @@
 #define UTILS
 
 #include <SFML/Network.hpp>
+#include <array>
 #include <dirent.h>
 #include <iostream>
 #include <string>
 #include <vector>
 using namespace std;
 
-#define CLIP(x, d, u) min(max(x, d), u)
 #define len(a) sizeof a / sizeof a[0];
-
-enum PlayerType { human, bot };
 
 // 28 bytes
 struct Configuration {
@@ -24,23 +22,37 @@ struct Configuration {
   int timeout = 10;
   int framesPerAnswer = 1;
   int numOfPlayers = 2;
+  array<sf::Vector2f, 3> checkpoints = {
+      sf::Vector2f(100, 300), sf::Vector2f(400, 500), sf::Vector2f(800, 500)};
+  int numOfCheckpoints = checkpoints.size();
 
   friend sf::Packet &operator<<(sf::Packet &os, const Configuration &c) {
     os << c.frontFriction << c.sideFriction << c.acc << c.dec << c.rotationSpeed
-       << c.maxVelocity << c.timeout << c.framesPerAnswer << c.numOfPlayers;
+       << c.maxVelocity << c.timeout << c.framesPerAnswer << c.numOfPlayers
+       << c.numOfCheckpoints;
+    for (auto &checkpoint : c.checkpoints) {
+      os << checkpoint.x << checkpoint.y;
+    }
     return os;
   }
 
   friend sf::Packet &operator>>(sf::Packet &os, Configuration &c) {
-    return os >> c.frontFriction >> c.sideFriction >> c.acc >> c.dec >>
-           c.rotationSpeed >> c.maxVelocity >> c.timeout >> c.framesPerAnswer >>
-           c.numOfPlayers;
+    os >> c.frontFriction >> c.sideFriction >> c.acc >> c.dec >>
+        c.rotationSpeed >> c.maxVelocity >> c.timeout >> c.framesPerAnswer >>
+        c.numOfPlayers >> c.numOfCheckpoints;
+    for (auto &checkpoint : c.checkpoints) {
+      os >> checkpoint.x >> checkpoint.y;
+    }
+    return os;
   }
 
   friend ostream &operator<<(ostream &os, const Configuration &c) {
     os << " " << c.frontFriction << " " << c.sideFriction << " " << c.acc << " "
        << c.dec << " " << c.rotationSpeed << " " << c.maxVelocity << " "
        << c.timeout << " " << c.framesPerAnswer << " " << c.numOfPlayers;
+    for (auto &checkpoint : c.checkpoints) {
+      os << checkpoint.x << checkpoint.y;
+    }
     return os;
   }
 };
@@ -72,8 +84,8 @@ struct PlayerState {
 };
 
 struct Response {
-  bool gas = 0;   // 0-100
-  int rotate = 0; //{-1, 0, 1}
+  int gas = 0;    // 0-100
+  int rotate = 0; // {-1, 0, 1}
   bool boost = 0;
 
   friend sf::Packet &operator<<(sf::Packet &os, const Response &r) {

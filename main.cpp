@@ -16,8 +16,6 @@
 #include <time.h>
 #include <vector>
 
-#include <unistd.h>
-
 using std::cin;
 using std::cout;
 using std::endl;
@@ -26,35 +24,36 @@ using std::min;
 using std::string;
 using std::vector;
 
-/*TODO:
-- use delta time NOT NEEDED?
-- add boost and animation
-- car collisions
-- car damage
+/*TODO: list
+  - car damage
+  - convert part of lateral force to vertical force
+  - add boost and animation
+  - use delta time NOT NEEDED?
 */
 
-vector<pid_t> spawnClients(Configuration &config, Server &server) {
-  vector<pid_t> clientIDs;
-  for (int i = 0; i < config.numOfPlayers; i++) {
-    string address = sf::IpAddress::getLocalAddress().toString();
-    string port = std::to_string(server.getPlayerSockets()[i]->getLocalPort());
-    string result = "/Users/mareksubocz/it/FastOrFurious/runClient " + address +
-                    " " + port + " " + std::to_string(i);
-    const char *char_array = result.c_str();
-    clientIDs.push_back(fork());
-    if (clientIDs[clientIDs.size() - 1] == 0) {
-      setpgid(getpid(), getpid());
-      system(char_array);
-      return clientIDs;
-    }
-  }
-  return clientIDs;
+void this_is_the_end(int &winnerNum, vector<Car *> &cars,
+                     sf::RenderWindow &window, sf::Sprite &background) {
+  sf::Font font;
+  font.loadFromFile("./font.ttf");
+  sf::Text text;
+  text.setFont(font);
+  text.setCharacterSize(100);
+  text.setStyle(sf::Text::Bold | sf::Text::Underlined);
+  text.setFillColor(cars[winnerNum]->getBody().getColor());
+  text.setString("Player " + to_string(winnerNum + 1) + " won!");
+  sf::FloatRect textRect = text.getLocalBounds();
+  text.setPosition(window.getView().getCenter() -
+                   sf::Vector2f(textRect.width / 2, textRect.height / 2));
+  background.setColor(sf::Color(100, 100, 100));
+  window.draw(text);
 }
+
 
 int main(int argc, char *argv[0]) {
   vector<pid_t> clientIDs;
+  int winnerNum = -1;
   try {
-    Configuration config;
+    const Configuration config;
     srand(time(NULL));
 
     vector<PlayerState> gameState(config.numOfPlayers);
@@ -67,22 +66,16 @@ int main(int argc, char *argv[0]) {
 
     Server server = Server(config);
     // spawn clients
-    clientIDs = spawnClients(config, server);
+    clientIDs = server.spawnClients(2);
     server.waitForConnections();
 
     sf::RenderWindow window(sf::VideoMode(1000, 1000), "Fast or Furious");
-    window.setVerticalSyncEnabled(true); // for artifacts when moving fast
-    // window.setFramerateLimit(60);
 
-    // setting random background image (grass, soil, water)
+    // draw background
     sf::Texture backgroundTexture;
     sf::Sprite background;
-    vector<string> backgroundPaths = getAllFilesInDirectory((
-        char *)"/Users/mareksubocz/it/FastOrFurious/img/PNG/Background_Tiles/");
-    int backgroundNumber = rand() % backgroundPaths.size();
-    backgroundTexture.loadFromFile(
-        "/Users/mareksubocz/it/FastOrFurious/img/PNG/Background_Tiles/" +
-        (string)backgroundPaths[backgroundNumber]);
+    backgroundTexture.loadFromFile("/Users/mareksubocz/it/FastOrFurious/img/"
+                                   "PNG/Background_Tiles/Soil_Tile.png");
     background.setTexture(backgroundTexture);
     background.setScale(
         (double)window.getSize().x / backgroundTexture.getSize().x,
@@ -104,14 +97,51 @@ int main(int argc, char *argv[0]) {
       server.waitForResponse();
       vector<Response> playerResponses = server.getPlayerResponses();
       // handle collisions
-      Car::handleCollisions(cars, gameState, config);
+      Car::handleCollisions(cars, config);
+      Car::handleCheckpoints(cars, config);
       for (int i = 0; i < config.numOfPlayers; i++) {
         cars[i]->handleResponse(playerResponses[i]);
         cars[i]->display(window);
       }
 
+      sf::CircleShape circleShape;
+      sf::CircleShape playerCircle;
+      playerCircle.setRadius(10);
+      playerCircle.setOrigin(10, 10);
+      circleShape.setFillColor(sf::Color(0, 150, 0, 100));
+      circleShape.setRadius(50);
+      circleShape.setOrigin(50, 50);
+      for (int i = 0; i < config.numOfCheckpoints; i++) {
+        circleShape.setPosition(config.checkpoints[i]);
+        window.draw(circleShape);
+        for (int j = 0; j < config.numOfPlayers; j++) {
+          if (gameState[j].checkpoint == i) {
+            playerCircle.setFillColor(cars[j]->getBody().getColor());
+            playerCircle.setPosition(
+                config.checkpoints[i] +
+                sf::Vector2f(15 * (2 * j - (config.numOfPlayers - 1)), 60));
+            window.draw(playerCircle);
+          }
+        }
+      }
+
+      // check if there's a winner
+      if (winnerNum == -1) {
+        for (int i = 0; i < config.numOfPlayers; i++) {
+          if (cars[i]->getLap() >= 3) {
+            this_is_the_end(i, cars, window, background);
+            winnerNum = i;
+          }
+        }
+      }
+      else{
+        this_is_the_end(winnerNum, cars, window, background);
+      }
+
       window.display();
     }
+
+    // clear auto-spawned clients
     for (auto &id : clientIDs) {
       kill(-id, SIGKILL);
     }

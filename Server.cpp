@@ -1,11 +1,12 @@
 #ifndef SERVER
 #define SERVER
 
+#include "utils.cpp"
 #include <SFML/Network.hpp>
 #include <SFML/System.hpp>
 #include <iostream>
 #include <vector>
-#include "utils.cpp"
+#include <unistd.h>
 
 using std::cout;
 using std::endl;
@@ -45,7 +46,7 @@ private:
   }
 
 public:
-  Server(Configuration config) {
+  Server(const Configuration & config) {
     this->config = config;
     players.resize(config.numOfPlayers);
     playerResponses.resize(config.numOfPlayers);
@@ -65,14 +66,15 @@ public:
     }
 
     int playersLeft = this->config.numOfPlayers;
-    while(playersLeft > 0){
+    while (playersLeft > 0) {
       if (selector.wait()) {
         for (auto &player : this->players) {
           if (selector.isReady(*player.socket)) {
             // receive ip and port from client
             player.socket->receive(packet, player.ip, player.port);
-            if (!(packet >> ipAddress >> port)){
+            if (!(packet >> ipAddress >> port)) {
               printf("Player %d didn't connect properly.\n", player.num);
+              throw std::invalid_argument("Player didn't connect properly.");
               break;
             }
             player.ip = ipAddress;
@@ -91,12 +93,12 @@ public:
     printf("All players connected.\n");
   }
 
-  void sendGameState(vector<PlayerState>& playerStates) {
+  void sendGameState(vector<PlayerState> &playerStates) {
     sf::Packet packet;
-    for (int i = 0; i < config.numOfPlayers; i++){
+    for (int i = 0; i < config.numOfPlayers; i++) {
       packet << playerStates[i];
     }
-    for (auto player : this->players){
+    for (auto player : this->players) {
       player.socket->send(packet, player.ip, player.port);
     }
   }
@@ -115,7 +117,7 @@ public:
 
     int playersLeft = this->config.numOfPlayers;
     sf::Time timeout = sf::milliseconds(this->config.timeout);
-    while(playersLeft > 0 and elapsed < timeout){
+    while (playersLeft > 0 and elapsed < timeout) {
       elapsed = clock.getElapsedTime();
       if (selector.wait(timeout - elapsed)) {
         for (auto player : this->players) {
@@ -123,7 +125,7 @@ public:
             // receive ip and port from client
             packet.clear();
             player.socket->receive(packet, player.ip, player.port);
-            if (!(packet >> playerResponses[player.num-1])){
+            if (!(packet >> playerResponses[player.num - 1])) {
               printf("Player %d sent corrupted message.\n", player.num);
               break;
             }
@@ -133,14 +135,32 @@ public:
         }
       }
     }
-    sf::sleep(timeout-elapsed);
+    sf::sleep(timeout - elapsed);
   }
 
-  vector<Response> getPlayerResponses(){ return this->playerResponses; }
+  vector<pid_t> spawnClients(int n) {
+    vector<pid_t> clientIDs;
+    for (int i = 0; i < n; i++) {
+      string address = sf::IpAddress::getLocalAddress().toString();
+      string port = std::to_string(this->getPlayerSockets()[i]->getLocalPort());
+      string result = "/Users/mareksubocz/it/FastOrFurious/runClient " +
+                      address + " " + port + " " + std::to_string(i);
+      const char *char_array = result.c_str();
+      clientIDs.push_back(fork());
+      if (clientIDs[clientIDs.size() - 1] == 0) {
+        setpgid(getpid(), getpid());
+        system(char_array);
+        return clientIDs;
+      }
+    }
+    return clientIDs;
+  }
 
-  vector<sf::UdpSocket*> getPlayerSockets() {
-    vector<sf::UdpSocket*> playerSockets;
-    for (auto &player : this->players){
+  vector<Response> getPlayerResponses() { return this->playerResponses; }
+
+  vector<sf::UdpSocket *> getPlayerSockets() {
+    vector<sf::UdpSocket *> playerSockets;
+    for (auto &player : this->players) {
       playerSockets.push_back(player.socket);
     }
     return playerSockets;

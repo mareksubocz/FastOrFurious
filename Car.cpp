@@ -27,24 +27,24 @@ private:
   int lap = 0;
   int checkpoint = 0;
   unsigned short port;
-  sf::Vector2f velocity;
+  sf::Vector2f vel;
   sf::Texture bodyTexture;
   sf::Sprite body;
   sf::CircleShape collider;
   Configuration config;
 
 public:
-  Car(double x, double y, Configuration config, bool smooth = true) {
+  Car(double x, double y, const Configuration &config, bool smooth = true) {
     this->config = config;
-    this->velocity = {0.0, 0.0};
-    vector<string> carFolderPaths = getAllFilesInDirectory(
-        (char *)"/Users/mareksubocz/it/FastOrFurious/img/PNG/Cars/");
-    carFolderPaths.erase(carFolderPaths.begin()); // remove first element
+    this->vel = {0.0, 0.0};
+    // vector<string> carFolderPaths = getAllFilesInDirectory(
+    //     (char *)"/Users/mareksubocz/it/FastOrFurious/img/PNG/Cars/");
+    // carFolderPaths.erase(carFolderPaths.begin()); // remove first element
     this->bodyTexture.loadFromFile(
-        "/Users/mareksubocz/it/FastOrFurious/img/PNG/Cars/" +
-        string(carFolderPaths[rand() % carFolderPaths.size()]) + "/01.png");
+        "/Users/mareksubocz/it/FastOrFurious/img/PNG/Cars/Yellow/01.png");
     this->bodyTexture.setSmooth(smooth);
     this->body.setTexture(bodyTexture);
+    this->body.setColor(sf::Color(rand() % 256, rand() % 256, rand() % 256));
     this->body.setScale((double)0.1 / this->body.getScale().x,
                         (double)0.1 / this->body.getScale().y);
     this->body.setOrigin(this->body.getTextureRect().width / 2,
@@ -57,22 +57,27 @@ public:
   }
 
   void turn(double rotation) {
-    this->body.rotate(rotation * dlugosc(this->velocity) * 0.4);
-    // sf::Transform t = this->body.getTransform();
-    // sf::Vector2f rotAxis = {this->getPosition().x, this->getPosition().y/2};
-    // t.rotate(rotation * dlugosc(this->velocity) * 0.4, rotAxis);
-    // this->body.setPosition(this->getPosition() +
-    // t.transformPoint(this->body.getOrigin() + this->getPosition()));
+    sf::Vector2f axis = this->body.getTransform().transformPoint(
+        this->body.getOrigin() + sf::Vector2f(0, -300));
+    sf::Transform t;
+    // t.rotate(rotation * dlugosc(this->velocity)* 0.3,axis);
+    t.rotate(rotation * (1 + 0.3 * (dlugosc(this->vel))), axis);
+    t *= this->body.getTransform();
+    this->body.setPosition(t.transformPoint(this->body.getOrigin()));
+    // this->body.rotate(rotation * dlugosc(this->velocity) * 0.3);
+    this->body.rotate(rotation * (1 + 0.3 * dlugosc(this->vel)));
   }
 
-  void move(bool gas) {
-    float y = 3.5 * gas;
+  void move(float gas) {
+    gas = clip(gas, 0.f, 100.f);
+    gas /= 100;
+    float y = 2.0 * gas;
     sf::Vector2f diff = sf::Vector2f(0., y);
     sf::Vector2f diffRotated =
         this->body.getPosition() -
         this->body.getTransform().transformPoint(this->body.getOrigin() + diff);
-    this->velocity += rotateToShape(diff, this->body);
-    this->body.move(velocity);
+    this->vel += rotateToShape(diff, this->body);
+    this->body.move(vel);
     if (this->body.getPosition().x <= 0 or this->body.getPosition().x > 1000) {
       this->setVelocity(
           sf::Vector2f(-this->getVelocity().x, this->getVelocity().y));
@@ -81,23 +86,26 @@ public:
       this->setVelocity(
           sf::Vector2f(this->getVelocity().x, -this->getVelocity().y));
     }
-    this->body.setPosition(CLIP((double)this->body.getPosition().x, 0., 1000.),
-                           CLIP((double)this->body.getPosition().y, 0., 1000.));
+    this->body.setPosition(clip((double)this->body.getPosition().x, 0., 1000.),
+                           clip((double)this->body.getPosition().y, 0., 1000.));
   }
 
-  // TODO: convert part of lateral force to vertical force
   void updateState() {
-    this->velocity.x *= 0.97;
-    this->velocity.y *= 0.97;
+    this->vel.x *= 0.97;
+    this->vel.y *= 0.97;
     this->collider.setPosition(this->getBody().getPosition());
   }
 
   void display(sf::RenderWindow &window) {
     window.draw(this->body);
-    window.draw(this->collider);
+    // window.draw(this->collider);
   }
 
   void handleResponse(Response response) {
+    if (this->lap > 0){
+      sf::Vector2f relVec = this->config.checkpoints[this->checkpoint] - this->getBody().getPosition();
+      relVec.y = -relVec.y;
+    }
     move(response.gas);
     turn(response.rotate);
     updateState();
@@ -107,32 +115,31 @@ public:
     PlayerState state;
     state.pos = this->body.getPosition();
     state.rotation = this->body.getRotation();
-    state.vel = this->velocity;
+    state.vel = this->vel;
     state.lap = this->lap;
     state.checkpoint = this->checkpoint;
     return state;
   }
 
   static void handleCollisions(vector<Car *> &cars,
-                               vector<PlayerState> &gameState,
-                               Configuration &config) {
+                               const Configuration &config) {
     for (int i = 0; i < config.numOfPlayers; i++) {
       for (int j = i + 1; j < config.numOfPlayers; j++) {
         // check if collision happened
-        float dist = distance(gameState[i].pos, gameState[j].pos);
+        float dist = distance(cars[i]->getBody().getPosition(), cars[j]->getBody().getPosition());
         if (dist < 80) { // collision happened
           sf::Vector2f v1d =
-              dot(gameState[i].vel - gameState[j].vel,
-                  gameState[i].pos - gameState[j].pos) /
-              (float)pow(distance(gameState[i].pos, gameState[j].pos), 2) *
-              (gameState[i].pos - gameState[j].pos);
+              dot(cars[i]->vel - cars[j]->vel,
+                  cars[i]->getBody().getPosition() - cars[j]->getBody().getPosition()) /
+              (float)pow(distance(cars[i]->getBody().getPosition(), cars[j]->getBody().getPosition()), 2) *
+              (cars[i]->getBody().getPosition() - cars[j]->getBody().getPosition());
           sf::Vector2f v2d =
-              dot(gameState[j].vel - gameState[i].vel,
-                  gameState[j].pos - gameState[i].pos) /
-              (float)pow(distance(gameState[j].pos, gameState[i].pos), 2) *
-              (gameState[j].pos - gameState[i].pos);
-          float diffx = gameState[i].pos.x - gameState[j].pos.x;
-          float diffy = gameState[i].pos.y - gameState[j].pos.y;
+              dot(cars[j]->vel - cars[i]->vel,
+                  cars[j]->getBody().getPosition() - cars[i]->getBody().getPosition()) /
+              (float)pow(distance(cars[j]->getBody().getPosition(), cars[i]->getBody().getPosition()), 2) *
+              (cars[j]->getBody().getPosition() - cars[i]->getBody().getPosition());
+          float diffx = cars[i]->getBody().getPosition().x - cars[j]->getBody().getPosition().x;
+          float diffy = cars[i]->getBody().getPosition().y - cars[j]->getBody().getPosition().y;
           cars[i]->setPosition(cars[i]->getBody().getPosition().x -
                                    0.5 * (dist - 80) * diffx / dist,
                                cars[i]->getBody().getPosition().y -
@@ -144,19 +151,33 @@ public:
 
           cars[i]->setVelocity(cars[i]->getVelocity() - v1d);
           cars[j]->setVelocity(cars[j]->getVelocity() - v2d);
+          sf::Vector2f forcei = cars[i]->vel - cars[i]->getVelocity();
+          sf::Vector2f forcej = cars[j]->vel - cars[j]->getVelocity();
         }
       }
     }
   }
 
-  // TODO: car position is center, rotate using transform.rotate(angle, center);
+  static void handleCheckpoints(vector<Car *> &cars,
+                                const Configuration &config) {
+    for (int i = 0; i<config.numOfPlayers; i++){
+      if (distance(cars[i]->getBody().getPosition(),config.checkpoints[cars[i]->checkpoint]) < 50){
+        cars[i]->checkpoint += 1;
+        if (cars[i]->checkpoint >= config.numOfCheckpoints){
+          cars[i]->checkpoint %= config.numOfCheckpoints;
+          cars[i]->lap += 1;
+        }
+      }
+    }
+  }
 
   sf::Sprite getBody() { return this->body; }
   unsigned short getPort() { return this->port; }
-  sf::Vector2f getVelocity() { return this->velocity; }
+  sf::Vector2f getVelocity() { return this->vel; }
+  int getLap() { return this->lap; }
   void setPosition(float x, float y) { this->body.setPosition(x, y); }
   void setPort(unsigned short port) { this->port = port; }
-  void setVelocity(sf::Vector2f velocity) { this->velocity = velocity; }
+  void setVelocity(sf::Vector2f velocity) { this->vel = velocity; }
 };
 
 #endif
