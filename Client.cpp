@@ -14,7 +14,7 @@ using std::endl;
 using std::string;
 using std::vector;
 
-enum class Version { human, simple };
+enum class Version { human, simple, adversary };
 
 class Client {
 private:
@@ -88,10 +88,51 @@ public:
     if (abs(turn) > 180.f) {
       turn = -turn;
     }
+    if (turn == 0) turn = 10;
     float gas = abs(100.f / turn);
 
     response.rotate = -sign(turn, 1.f);
     response.gas = gas;
+    return response;
+  }
+
+  Response calculateResponseAdversary() {
+
+    // drive around if you won
+    int lastLeft = -1;
+    for (auto const &p : this->playerStates){
+      if (p.health > 0){
+        lastLeft++;
+      }
+    }
+    if (lastLeft > 0){ return calculateResponseBot(); }
+
+    Response response;
+    int targetI = -1;
+    sf::Vector2f target;
+    float minDistance = MAXFLOAT;
+    for (int i = 0; i<this->config.numOfPlayers; i++){
+      if (i == this->num or this->playerStates[i].health <= 0){ continue; }
+      float tmp = distance(this->playerStates[this->num].pos, this->playerStates[i].pos);
+      if (tmp < minDistance){
+        minDistance = tmp;
+        target = this->playerStates[i].pos;
+        targetI = i;
+      }
+    }
+    sf::Vector2f myPos = this->playerStates[this->num].pos;
+    sf::Vector2f relVec = target - myPos;
+    relVec.y = -relVec.y;
+    float myRot = this->playerStates[this->num].rotation;
+
+    float turn = myRot - vectorRotation(relVec);
+    if (abs(turn) > 180.f) {
+      turn = -turn;
+    }
+    if (turn == 0) turn = 10;
+
+    response.rotate = -sign(turn, 1.f);
+    response.gas = 100;
     return response;
   }
 
@@ -145,6 +186,8 @@ public:
         case Version::simple:
           response = calculateResponseBot();
           break;
+        case Version::adversary:
+          response = calculateResponseAdversary();
       }
       sendResponse(response);
     }

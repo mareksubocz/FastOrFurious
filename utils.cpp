@@ -11,7 +11,7 @@ using namespace std;
 
 #define len(a) sizeof a / sizeof a[0];
 
-// 28 bytes
+// 22 bytes
 struct Configuration {
   float frontFriction = .2;
   float sideFriction = .99;
@@ -21,9 +21,9 @@ struct Configuration {
   float maxVelocity = 1.;
   int timeout = 10;
   int framesPerAnswer = 1;
-  int numOfPlayers = 2;
+  int numOfPlayers = 8;
   array<sf::Vector2f, 3> checkpoints = {
-      sf::Vector2f(100, 300), sf::Vector2f(400, 500), sf::Vector2f(800, 500)};
+      sf::Vector2f(200, 100), sf::Vector2f(400, 850), sf::Vector2f(800, 500)};
   int numOfCheckpoints = checkpoints.size();
 
   friend sf::Packet &operator<<(sf::Packet &os, const Configuration &c) {
@@ -64,21 +64,22 @@ struct PlayerState {
   float rotation;
   int lap;
   int checkpoint;
+  int health;
 
   friend sf::Packet &operator<<(sf::Packet &os, const PlayerState &p) {
     os << p.pos.x << p.pos.y << p.vel.x << p.vel.y << p.rotation << p.lap
-       << p.checkpoint;
+       << p.checkpoint << p.health;
     return os;
   }
 
   friend sf::Packet &operator>>(sf::Packet &os, PlayerState &p) {
     return os >> p.pos.x >> p.pos.y >> p.vel.x >> p.vel.y >> p.rotation >>
-           p.lap >> p.checkpoint;
+           p.lap >> p.checkpoint >> p.health;
   }
 
   friend ostream &operator<<(ostream &os, const PlayerState &p) {
     os << p.pos.x << " " << p.pos.y << " " << p.vel.x << " " << p.vel.y << " "
-       << p.rotation << " " << p.lap << " " << p.checkpoint;
+       << p.rotation << " " << p.lap << " " << p.checkpoint << " " << p.health;
     return os;
   }
 };

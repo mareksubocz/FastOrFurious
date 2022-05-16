@@ -6,7 +6,6 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
 #include <dirent.h>
-#include <filesystem>
 #include <iostream>
 #include <math.h>
 #include <signal.h>
@@ -25,16 +24,17 @@ using std::string;
 using std::vector;
 
 /*TODO: list
-  - car damage
+  - send DEAD do dead client
   - convert part of lateral force to vertical force
   - add boost and animation
   - use delta time NOT NEEDED?
 */
 
-void this_is_the_end(int &winnerNum, vector<Car *> &cars,
-                     sf::RenderWindow &window, sf::Sprite &background) {
+void this_is_the_end(int &winnerNum, vector<std::unique_ptr<Car>> &cars,
+                     sf::RenderWindow &window, sf::Sprite &background,
+                     string &path) {
   sf::Font font;
-  font.loadFromFile("./font.ttf");
+  font.loadFromFile(path + "/font.ttf");
   sf::Text text;
   text.setFont(font);
   text.setCharacterSize(100);
@@ -48,9 +48,11 @@ void this_is_the_end(int &winnerNum, vector<Car *> &cars,
   window.draw(text);
 }
 
-
 int main(int argc, char *argv[0]) {
-  vector<pid_t> clientIDs;
+  vector<pid_t> clientIDs; // macOS
+  // vector<std::thread> clientThreads; // windows/linux
+  string base_path = string(argv[0]);
+  base_path = base_path.substr(0, base_path.find_last_of("/") + 1);
   int winnerNum = -1;
   try {
     const Configuration config;
@@ -58,15 +60,38 @@ int main(int argc, char *argv[0]) {
 
     vector<PlayerState> gameState(config.numOfPlayers);
 
-    vector<Car *> cars;
+    vector<std::unique_ptr<Car>> cars;
     for (int i = 0; i < config.numOfPlayers; i++) {
-      Car *car = new Car(200 + 200 * i, 200 + 200 * i, config);
-      cars.push_back(car);
+      cars.push_back(
+          std::make_unique<Car>(200 + 100 * i, 800, config, base_path));
     }
 
     Server server = Server(config);
-    // spawn clients
-    clientIDs = server.spawnClients(2);
+
+    // spawn clients macOS
+    clientIDs = server.spawnClients(
+        {
+        Version::human,
+        Version::human,
+        Version::simple,
+        Version::simple,
+        Version::simple,
+        Version::simple,
+        Version::simple,
+        Version::adversary,
+        },
+        base_path);
+    // spawn clients windows/linux
+    // clientThreads = server.spawnClientsThreads({
+    //     Version::human,
+    //     Version::human,
+    //     Version::simple,
+    //     Version::simple,
+    //     Version::simple,
+    //     Version::simple,
+    //     Version::simple,
+    //     Version::simple});
+
     server.waitForConnections();
 
     sf::RenderWindow window(sf::VideoMode(1000, 1000), "Fast or Furious");
@@ -74,8 +99,8 @@ int main(int argc, char *argv[0]) {
     // draw background
     sf::Texture backgroundTexture;
     sf::Sprite background;
-    backgroundTexture.loadFromFile("/Users/mareksubocz/it/FastOrFurious/img/"
-                                   "PNG/Background_Tiles/Soil_Tile.png");
+    backgroundTexture.loadFromFile(base_path +
+                                   "/img/PNG/Background_Tiles/Soil_Tile.png");
     background.setTexture(backgroundTexture);
     background.setScale(
         (double)window.getSize().x / backgroundTexture.getSize().x,
@@ -91,15 +116,16 @@ int main(int argc, char *argv[0]) {
       window.draw(background);
 
       for (int i = 0; i < config.numOfPlayers; i++) {
+        // if (cars[i]->getHealth() <= 0) continue;
         gameState[i] = cars[i]->getPlayerState();
       }
       server.sendGameState(gameState);
       server.waitForResponse();
       vector<Response> playerResponses = server.getPlayerResponses();
-      // handle collisions
       Car::handleCollisions(cars, config);
-      Car::handleCheckpoints(cars, config);
+      Car::handleCheckpoints(cars, config );
       for (int i = 0; i < config.numOfPlayers; i++) {
+        if (cars[i]->getHealth() <= 0) continue;
         cars[i]->handleResponse(playerResponses[i]);
         cars[i]->display(window);
       }
@@ -115,6 +141,7 @@ int main(int argc, char *argv[0]) {
         circleShape.setPosition(config.checkpoints[i]);
         window.draw(circleShape);
         for (int j = 0; j < config.numOfPlayers; j++) {
+          if (cars[j]->getHealth() <= 0) continue;
           if (gameState[j].checkpoint == i) {
             playerCircle.setFillColor(cars[j]->getBody().getColor());
             playerCircle.setPosition(
@@ -126,30 +153,50 @@ int main(int argc, char *argv[0]) {
       }
 
       // check if there's a winner
+      int playersLeftCounter = 0;
+      int playerLeftNum = -1;
       if (winnerNum == -1) {
+        for (int i = 0; i < config.numOfPlayers; i++){
+          if (cars[i]->getHealth() > 0){
+            playersLeftCounter++;
+            playerLeftNum = i;
+          }
+        }
+        if (playersLeftCounter < 2){
+          winnerNum = playerLeftNum;
+        }
+
         for (int i = 0; i < config.numOfPlayers; i++) {
+          if (cars[i]->getHealth() <= 0) { continue; }
           if (cars[i]->getLap() >= 3) {
-            this_is_the_end(i, cars, window, background);
+
+            this_is_the_end(i, cars, window, background, base_path);
             winnerNum = i;
           }
         }
-      }
-      else{
-        this_is_the_end(winnerNum, cars, window, background);
+      } else {
+        this_is_the_end(winnerNum, cars, window, background, base_path);
       }
 
       window.display();
     }
 
     // clear auto-spawned clients
-    for (auto &id : clientIDs) {
+    for (auto &id : clientIDs) { // macOS
       kill(-id, SIGKILL);
     }
+    // for (auto &thread : clientThreads){ // windows/linux
+    //   thread.join();
+    // }
   } catch (const std::exception &ex) {
     cout << ex.what() << endl;
-    for (auto &id : clientIDs) {
+
+    for (auto &id : clientIDs) { // macOS
       kill(-id, SIGKILL);
     }
+    // for (auto &thread : clientThreads){ // windows/linux
+    //   thread.join();
+    // }
   }
 
   return 0;
