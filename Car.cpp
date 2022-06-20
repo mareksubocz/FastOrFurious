@@ -77,6 +77,7 @@ public:
     this->body.rotate(rotation * (1 + 0.3 * dlugosc(this->vel)));
   }
 
+  //TODO: make rotation dependent on velocity, not gas
   void move(float gas) {
     gas = clip(gas, 0.f, 100.f);
     gas /= 100;

@@ -108,7 +108,6 @@ public:
     if (lastLeft > 0){ return calculateResponseBot(); }
 
     Response response;
-    int targetI = -1;
     sf::Vector2f target;
     float minDistance = MAXFLOAT;
     for (int i = 0; i<this->config.numOfPlayers; i++){
@@ -117,7 +116,6 @@ public:
       if (tmp < minDistance){
         minDistance = tmp;
         target = this->playerStates[i].pos;
-        targetI = i;
       }
     }
     sf::Vector2f myPos = this->playerStates[this->num].pos;

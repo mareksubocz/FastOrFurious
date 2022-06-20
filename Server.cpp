@@ -59,8 +59,6 @@ public:
 
   // Wait endlessly until all players send information about their port.
   void waitForConnections() {
-    char ipAddress[20];
-    unsigned int port;
     sf::Packet packet;
     sf::SocketSelector selector;
 
@@ -76,13 +74,7 @@ public:
           if (selector.isReady(*player.socket)) {
             // receive ip and port from client
             player.socket->receive(packet, player.ip, player.port);
-            if (!(packet >> ipAddress >> port)) {
-              printf("Player %d didn't connect properly.\n", player.num);
-              throw std::invalid_argument("Player didn't connect properly.");
-              break;
-            }
-            player.ip = ipAddress;
-            player.port = port;
+            cout<<player.ip<<" "<<player.port<<endl;
             player.ready = true;
             printf("Player %d connected.\n", player.num);
 

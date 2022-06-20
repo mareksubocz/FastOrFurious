@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <iostream>
 #include <math.h>
+#include <fstream>
 #include <signal.h>
 #include <stdlib.h>
 #include <string>
@@ -24,11 +25,79 @@ using std::string;
 using std::vector;
 
 /*TODO: list
-  - send DEAD do dead client
+  - save states and responses to csv
+
+  - send DEAD to dead client
   - convert part of lateral force to vertical force
   - add boost and animation
   - use delta time NOT NEEDED?
 */
+
+// class GameController {
+//   // TODO: get closest car should belong here, as well as handling collisions
+// private:
+//   bool gameEnded = false;
+//   int winnernum = -1;
+//   int playersLeft;
+//   Configuration config;
+//   Server server;
+//   string basePath;
+//   sf::Font endFont;
+//   sf::Text endText;
+//   sf::Sprite background;
+//   sf::RenderWindow window;
+//   vector<pid_t> clientIDs;
+//   vector<std::unique_ptr<Car>> cars;
+//
+//
+// public:
+//   GameController(Configuration config, char *argv[0])
+//   : window(sf::VideoMode(1000,1000), "Fast or Furious"), server(this->config) {
+//     this->basePath = string(argv[0]);
+//     this->basePath = this->basePath.substr(0, this->basePath.find_last_of("/") + 1);
+//     this->endFont.loadFromFile(basePath + "/font.ttf");
+//     this->config = config;
+//     this->clientIDs = this->server.spawnClients({
+//         //TODO: move this to config
+//         Version::human
+//         }, basePath);
+//
+//     sf::Texture backgroundTexture;
+//     backgroundTexture.loadFromFile(this->basePath +
+//                                    "/img/PNG/Background_Tiles/Soil_Tile.png");
+//     this->background.setTexture(backgroundTexture);
+//     this->background.setScale(
+//         (double)window.getSize().x / backgroundTexture.getSize().x,
+//         (double)window.getSize().y / backgroundTexture.getSize().y
+//         );
+//     this->playersLeft = this->config.numOfPlayers;
+//   }
+//
+//   void start(){
+//     this->server.waitForConnections();
+//     while(window.isOpen()){
+//
+//     }
+//   }
+//
+// private:
+//   void draw(){
+//
+//   }
+// };
+PlayerState getClosest(PlayerState p, vector<PlayerState> &gameState){
+  float minDist = INFINITY;
+  PlayerState closest;
+  for (auto & player : gameState){
+    float dist = distance(p.pos, player.pos);
+    if (dist < 0.1) continue;
+    if (dist < minDist){
+      minDist = dist;
+      closest = player;
+    }
+  }
+  return closest;
+}
 
 void this_is_the_end(int &winnerNum, vector<std::unique_ptr<Car>> &cars,
                      sf::RenderWindow &window, sf::Sprite &background,
@@ -49,17 +118,17 @@ void this_is_the_end(int &winnerNum, vector<std::unique_ptr<Car>> &cars,
 }
 
 int main(int argc, char *argv[0]) {
+  srand(time(NULL));
   vector<pid_t> clientIDs; // macOS
-  // vector<std::thread> clientThreads; // windows/linux
+
   string base_path = string(argv[0]);
   base_path = base_path.substr(0, base_path.find_last_of("/") + 1);
   int winnerNum = -1;
+
   try {
     const Configuration config;
-    srand(time(NULL));
 
     vector<PlayerState> gameState(config.numOfPlayers);
-
     vector<std::unique_ptr<Car>> cars;
     for (int i = 0; i < config.numOfPlayers; i++) {
       cars.push_back(
@@ -72,26 +141,10 @@ int main(int argc, char *argv[0]) {
     clientIDs = server.spawnClients(
         {
         Version::human,
-        Version::human,
         Version::simple,
         Version::simple,
-        Version::simple,
-        Version::simple,
-        Version::simple,
-        Version::adversary,
         },
         base_path);
-    // spawn clients windows/linux
-    // clientThreads = server.spawnClientsThreads({
-    //     Version::human,
-    //     Version::human,
-    //     Version::simple,
-    //     Version::simple,
-    //     Version::simple,
-    //     Version::simple,
-    //     Version::simple,
-    //     Version::simple});
-
     server.waitForConnections();
 
     sf::RenderWindow window(sf::VideoMode(1000, 1000), "Fast or Furious");
@@ -122,6 +175,29 @@ int main(int argc, char *argv[0]) {
       server.sendGameState(gameState);
       server.waitForResponse();
       vector<Response> playerResponses = server.getPlayerResponses();
+
+      //TODO: save gamestate and player responses
+      string filename("test.csv");
+      ofstream file_out;
+      file_out.open(filename, std::ios_base::app);
+      PlayerState closest = getClosest(gameState[0], gameState);
+      sf::Vector2f relativePos = closest.pos - gameState[0].pos;
+      sf::Vector2f relativeVel = closest.vel - gameState[0].vel;
+      float relativeRot = vectorRotation(relativePos) - gameState[0].rotation;
+      sf::Vector2f relativeChkptPos = config.checkpoints[gameState[0].checkpoint] - gameState[0].pos;
+      float relativeChkptRot = vectorRotation(relativeChkptPos) - gameState[0].rotation;
+      file_out << gameState[0]       << ", "
+               << relativePos.x      << ", "
+               << relativePos.y      << ", "
+               << relativeVel.x      << ", "
+               << relativeVel.y      << ", "
+               << relativeRot        << ", "
+               << closest.health     << ", "
+               << relativeChkptPos.x << ", "
+               << relativeChkptPos.y << ", "
+               << relativeChkptRot   << ", "
+               << playerResponses[0] << endl;
+
       Car::handleCollisions(cars, config);
       Car::handleCheckpoints(cars, config );
       for (int i = 0; i < config.numOfPlayers; i++) {
@@ -185,18 +261,12 @@ int main(int argc, char *argv[0]) {
     for (auto &id : clientIDs) { // macOS
       kill(-id, SIGKILL);
     }
-    // for (auto &thread : clientThreads){ // windows/linux
-    //   thread.join();
-    // }
   } catch (const std::exception &ex) {
     cout << ex.what() << endl;
 
     for (auto &id : clientIDs) { // macOS
       kill(-id, SIGKILL);
     }
-    // for (auto &thread : clientThreads){ // windows/linux
-    //   thread.join();
-    // }
   }
 
   return 0;

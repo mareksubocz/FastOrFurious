@@ -21,9 +21,9 @@ struct Configuration {
   float maxVelocity = 1.;
   int timeout = 10;
   int framesPerAnswer = 1;
-  int numOfPlayers = 8;
+  int numOfPlayers = 4;
   array<sf::Vector2f, 3> checkpoints = {
-      sf::Vector2f(200, 100), sf::Vector2f(400, 850), sf::Vector2f(800, 500)};
+      sf::Vector2f(rand()%900+50, rand()%900+50), sf::Vector2f(rand()%900+50, rand()%900+50), sf::Vector2f(rand()%900+50, rand()%900+50)};
   int numOfCheckpoints = checkpoints.size();
 
   friend sf::Packet &operator<<(sf::Packet &os, const Configuration &c) {
@@ -78,8 +78,8 @@ struct PlayerState {
   }
 
   friend ostream &operator<<(ostream &os, const PlayerState &p) {
-    os << p.pos.x << " " << p.pos.y << " " << p.vel.x << " " << p.vel.y << " "
-       << p.rotation << " " << p.lap << " " << p.checkpoint << " " << p.health;
+    os << p.pos.x << ", " << p.pos.y << ", " << p.vel.x << ", " << p.vel.y << ", "
+       << p.rotation << ", " << p.lap << ", " << p.checkpoint << ", " << p.health;
     return os;
   }
 };
@@ -99,7 +99,7 @@ struct Response {
   }
 
   friend ostream &operator<<(ostream &os, const Response &r) {
-    os << r.gas << " " << r.rotate << " " << r.boost;
+    os << r.gas << ", " << r.rotate << ", " << r.boost;
     return os;
   }
 };
